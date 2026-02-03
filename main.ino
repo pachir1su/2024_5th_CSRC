@@ -20,7 +20,6 @@
 #define FAN_LED_GREEN 35
 #define FND_CLK 26
 #define FND_DIO 27
-#define LIGHT_SENSOR_PIN A0
 
 // FND 및 심박수, LCD 설정
 TM1637Display display(FND_CLK, FND_DIO);
