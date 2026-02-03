@@ -30,6 +30,7 @@ LiquidCrystal_I2C lcd(0x27, 16, 2);
 unsigned long startTime = 0;
 unsigned long elapsedTime = 0;
 bool isTiming = false;
+bool isStopped = false;
 int beatAvg;
 
 // 버튼 상태 확인 변수
@@ -39,7 +40,7 @@ bool resetPressed = false;
 
 void setup() {
   Serial.begin(9600);
-  
+
   // FND 디스플레이 설정
   display.setBrightness(0x0f);
 
@@ -85,12 +86,12 @@ void loop() {
   if (!mainLeverOn) {
     digitalWrite(LED_GREEN, LOW);
     digitalWrite(LED_RED, HIGH);
-    display.showNumberDecEx(0, 0b01000000, true); // FND에 0 표시
-    digitalWrite(FAN_MOTOR_INA, LOW); // 팬 모터 OFF
+    display.showNumberDecEx(0, 0b01000000, true);
+    digitalWrite(FAN_MOTOR_INA, LOW);
     digitalWrite(FAN_MOTOR_INB, LOW);
-    digitalWrite(FAN_LED_RED, HIGH);  // 팬 꺼짐 상태로 R LED 켜기
-    digitalWrite(FAN_LED_GREEN, LOW); // G LED 끄기
-    return; // 메인 레버가 OFF일 경우 모든 기능 정지
+    digitalWrite(FAN_LED_RED, HIGH);
+    digitalWrite(FAN_LED_GREEN, LOW);
+    return;
   } else {
     digitalWrite(LED_GREEN, HIGH);
     digitalWrite(LED_RED, LOW);
@@ -98,84 +99,64 @@ void loop() {
 
   // 팬 모터 및 LED 제어
   if (fanLeverOn) {
-    // 팬 모터 정방향 회전 및 G LED 켜기
     digitalWrite(FAN_MOTOR_INA, HIGH);
     digitalWrite(FAN_MOTOR_INB, LOW);
-    digitalWrite(FAN_LED_GREEN, HIGH); // 팬 작동 상태로 G LED 켜기
-    digitalWrite(FAN_LED_RED, LOW);    // R LED 끄기
+    digitalWrite(FAN_LED_GREEN, HIGH);
+    digitalWrite(FAN_LED_RED, LOW);
   } else {
-    // 팬 모터 정지 및 R LED 켜기
     digitalWrite(FAN_MOTOR_INA, LOW);
     digitalWrite(FAN_MOTOR_INB, LOW);
-    digitalWrite(FAN_LED_RED, HIGH);   // 팬 꺼짐 상태로 R LED 켜기
-    digitalWrite(FAN_LED_GREEN, LOW);  // G LED 끄기
+    digitalWrite(FAN_LED_RED, HIGH);
+    digitalWrite(FAN_LED_GREEN, LOW);
   }
 
-  // 버튼 입력 확인 (부저 삐 소리 추가)
+  // 스톱워치 기능
   if (digitalRead(BUTTON_START) == LOW && !startPressed) {
     startPressed = true;
     isTiming = true;
-    startTime = millis();
+    isStopped = false;
+    startTime = millis() - elapsedTime; // 재시작 시 이전 경과 시간 포함
     tone(BUZZER_PIN, 1000, 100); // 부저 삐 소리
   }
-  if (digitalRead(BUTTON_START) == HIGH && startPressed) {
+  if (digitalRead(BUTTON_START) == HIGH) {
     startPressed = false;
   }
 
   if (digitalRead(BUTTON_STOP) == LOW && !stopPressed) {
     stopPressed = true;
     isTiming = false;
-    elapsedTime += millis() - startTime;
-    startTime = millis(); // startTime 초기화
+    isStopped = true;
+    elapsedTime = millis() - startTime;
     tone(BUZZER_PIN, 1000, 100); // 부저 삐 소리
   }
-  if (digitalRead(BUTTON_STOP) == HIGH && stopPressed) {
+  if (digitalRead(BUTTON_STOP) == HIGH) {
     stopPressed = false;
   }
 
   if (digitalRead(BUTTON_RESET) == LOW && !resetPressed) {
     resetPressed = true;
     isTiming = false;
+    isStopped = false;
     elapsedTime = 0;
-    display.showNumberDecEx(0, 0b01000000, true); // FND에 0 표시
+    display.showNumberDecEx(0, 0b01000000, true);
     tone(BUZZER_PIN, 1000, 100); // 부저 삐 소리
   }
-  if (digitalRead(BUTTON_RESET) == HIGH && resetPressed) {
+  if (digitalRead(BUTTON_RESET) == HIGH) {
     resetPressed = false;
   }
 
-  // 스탑워치 동작 및 FND 출력
+  // 스톱워치 동작 및 FND 출력
   if (isTiming) {
     unsigned long currentTime = millis();
-    unsigned long totalElapsedTime = (elapsedTime + (currentTime - startTime)) / 1000;
+    unsigned long totalElapsedTime = (currentTime - startTime) / 1000;
     int minutes = totalElapsedTime / 60;
     int seconds = totalElapsedTime % 60;
     display.showNumberDecEx(minutes * 100 + seconds, 0b01000000, true); // 분:초 형식
-  } else {
+  } else if (isStopped) {
     int minutes = elapsedTime / 60000;
     int seconds = (elapsedTime / 1000) % 60;
     display.showNumberDecEx(minutes * 100 + seconds, 0b01000000, true); // 멈췄을 때 경과 시간 유지
   }
-
-  // 심박수 측정 및 LCD 출력
-  long irValue = particleSensor.getIR();
-  if (checkForBeat(irValue)) {
-    long delta = millis() - startTime;
-    startTime = millis();
-    beatAvg = 60 / (delta / 1000.0);
-
-    if (beatAvg > 10 && beatAvg < 180) {
-      lcd.setCursor(0, 1);
-      lcd.print("BPM: ");
-      lcd.print(beatAvg);
-      lcd.print("   ");
-    }
-  }
-
-  // 조도 센서로 LED 밝기 조절
-  int lightLevel = analogRead(LIGHT_SENSOR_PIN);
-  int ledBrightness = map(lightLevel, 0, 1023, 0, 255);
-  analogWrite(LED_PIN, ledBrightness);
 
   delay(100);
 }
