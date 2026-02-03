@@ -9,13 +9,16 @@
 #define BUTTON_STOP 3
 #define BUTTON_RESET 4
 #define BUZZER_PIN 23
-#define LEVER_PIN 22
+#define MAIN_LEVER_PIN 22
+#define FAN_LEVER_PIN 30
 #define LED_RED 8
 #define LED_GREEN 9
 #define LED_PIN 10
 #define FAN_MOTOR_INA 11
 #define FAN_MOTOR_INB 12
-#define FND_CLK 26'
+#define FAN_LED_RED 34
+#define FAN_LED_GREEN 35
+#define FND_CLK 26
 #define FND_DIO 27
 #define LIGHT_SENSOR_PIN A0
 
@@ -59,11 +62,14 @@ void setup() {
   pinMode(BUTTON_STOP, INPUT_PULLUP);
   pinMode(BUTTON_RESET, INPUT_PULLUP);
   pinMode(BUZZER_PIN, OUTPUT);
-  pinMode(LEVER_PIN, INPUT_PULLUP);
+  pinMode(MAIN_LEVER_PIN, INPUT_PULLUP);
+  pinMode(FAN_LEVER_PIN, INPUT_PULLUP);
   pinMode(LED_RED, OUTPUT);
   pinMode(LED_GREEN, OUTPUT);
   pinMode(FAN_MOTOR_INA, OUTPUT);
   pinMode(FAN_MOTOR_INB, OUTPUT);
+  pinMode(FAN_LED_RED, OUTPUT);
+  pinMode(FAN_LED_GREEN, OUTPUT);
   pinMode(LED_PIN, OUTPUT);
 
   // 초기 FND 디스플레이 표시
@@ -71,18 +77,38 @@ void setup() {
 }
 
 void loop() {
-  // 레버 상태 확인
-  bool leverOn = digitalRead(LEVER_PIN) == HIGH; // 레버가 ON이면 HIGH로 설정
+  // 메인 레버 상태 확인
+  bool mainLeverOn = digitalRead(MAIN_LEVER_PIN) == HIGH;
+  bool fanLeverOn = digitalRead(FAN_LEVER_PIN) == HIGH;
 
-  // 레버에 따른 LED 제어
-  if (leverOn) {
-    digitalWrite(LED_GREEN, HIGH);
-    digitalWrite(LED_RED, LOW);
-  } else {
+  // 메인 레버에 따른 전체 시스템 제어
+  if (!mainLeverOn) {
     digitalWrite(LED_GREEN, LOW);
     digitalWrite(LED_RED, HIGH);
     display.showNumberDecEx(0, 0b01000000, true); // FND에 0 표시
-    return; // 레버가 OFF일 경우 모든 기능 정지
+    digitalWrite(FAN_MOTOR_INA, LOW); // 팬 모터 OFF
+    digitalWrite(FAN_MOTOR_INB, LOW);
+    digitalWrite(FAN_LED_RED, HIGH);  // 팬 꺼짐 상태로 R LED 켜기
+    digitalWrite(FAN_LED_GREEN, LOW); // G LED 끄기
+    return; // 메인 레버가 OFF일 경우 모든 기능 정지
+  } else {
+    digitalWrite(LED_GREEN, HIGH);
+    digitalWrite(LED_RED, LOW);
+  }
+
+  // 팬 모터 및 LED 제어
+  if (fanLeverOn) {
+    // 팬 모터 정방향 회전 및 G LED 켜기
+    digitalWrite(FAN_MOTOR_INA, HIGH);
+    digitalWrite(FAN_MOTOR_INB, LOW);
+    digitalWrite(FAN_LED_GREEN, HIGH); // 팬 작동 상태로 G LED 켜기
+    digitalWrite(FAN_LED_RED, LOW);    // R LED 끄기
+  } else {
+    // 팬 모터 정지 및 R LED 켜기
+    digitalWrite(FAN_MOTOR_INA, LOW);
+    digitalWrite(FAN_MOTOR_INB, LOW);
+    digitalWrite(FAN_LED_RED, HIGH);   // 팬 꺼짐 상태로 R LED 켜기
+    digitalWrite(FAN_LED_GREEN, LOW);  // G LED 끄기
   }
 
   // 버튼 입력 확인 (부저 삐 소리 추가)
@@ -150,11 +176,6 @@ void loop() {
   int lightLevel = analogRead(LIGHT_SENSOR_PIN);
   int ledBrightness = map(lightLevel, 0, 1023, 0, 255);
   analogWrite(LED_PIN, ledBrightness);
-
-  // 심박수에 따른 팬 모터 제어
-  int fanSpeed = map(beatAvg, 60, 120, 0, 255); // 심박수 60~120에 맞춰 팬 속도 조절
-  analogWrite(FAN_MOTOR_INA, fanSpeed);
-  digitalWrite(FAN_MOTOR_INB, LOW); // 팬 모터 반대방향 회전 방지
 
   delay(100);
 }
